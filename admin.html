@@ -122,7 +122,7 @@ function autoRef(){clearInterval(tmr);if($('auto').checked)tmr=setInterval(()=>{
 const U=()=>D&&D.ujian.find(u=>same(u.id,$('ujSel').value));
 function target(){
   const u=U();if(!u)return[];const k=$('klsSel').value,uk=String(u.kelas).toLowerCase();
-  return D.siswa.filter(s=>(uk==='semua'||uk===String(s.kelas).toLowerCase())&&(!k||s.kelas===k))
+  return D.siswa.filter(s=>kc(u.kelas,s.kelas)&&(!k||s.kelas===k))
     .sort((a,b)=>String(a.kelas).localeCompare(b.kelas)||String(a.nama).localeCompare(b.nama));
 }
 function st(s,u){
@@ -249,7 +249,7 @@ const tgl=()=>new Date().toLocaleDateString('id-ID',{dateStyle:'long'});
 async function detail(){const u=U();if(!DET[u.id])DET[u.id]=await api({a:'a_detail',admin:AP,ujian:u.id});return DET[u.id]}
 function daftarSoal(s,Dt){
   const se=D.sesi.find(x=>same(x.nis,s.nis)&&same(x.ujian,U().id)),ids=se&&String(se.soalids||'')?String(se.soalids).split(','):null;
-  return Dt.soal.filter(q=>(nrm(q.kelas)==='semua'||nrm(q.kelas)===nrm(s.kelas))&&(!ids||ids.includes(String(q.id))));
+  return Dt.soal.filter(q=>kc(q.kelas,s.kelas)&&(!ids||ids.includes(String(q.id))));
 }
 
 /* --- Excel --- */
@@ -355,6 +355,7 @@ async function muatInfo(){try{const j=await api({a:'info'});$('inNama').value=j.
 async function simpanInfo(){try{await api({a:'a_info',admin:AP,nama:$('inNama').value.trim(),sub:$('inSub').value.trim()});alert('Judul beranda diperbarui. Siswa melihatnya saat memuat ulang halaman.')}catch(e){alert(e.message)}}
 
 /* ===== v3: pengaturan ujian & sesi (formulir sederhana) ===== */
+const kc=(k,sk)=>{const x=nrm(k),y=nrm(sk);return x==='semua'||x===y||(/^\d+$/.test(x)&&y.indexOf(x)===0&&!/\d/.test(y.charAt(x.length)||''))};
 const pad2=n=>String(n).padStart(2,'0');
 const dtl=d=>`${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 const toS=x=>String(x||'').replace('T',' ');
@@ -363,7 +364,7 @@ const ms=x=>{const t=new Date(String(x||'').replace(' ','T')).getTime();return i
 const ya=x=>String(x).trim().toLowerCase()==='ya';
 function stU(u){if(!ya(u.aktif))return['Nonaktif','#6b7a76'];const m=ms(u.mulai),s=ms(u.selesai),n=Date.now();
   if(m!==null&&n<m)return['Belum dibuka','#b8892b'];if(s!==null&&n>s)return['Ditutup','#a32222'];return['Sedang dibuka','#1d7a45']}
-const tersedia=u=>(D.bank||[]).filter(b=>nrm(b.mapel)===nrm(u.mapel)&&(nrm(u.kelas)==='semua'||nrm(b.kelas)==='semua'||nrm(b.kelas)===nrm(u.kelas))).reduce((x,b)=>x+Number(b.n),0);
+const tersedia=u=>(D.bank||[]).filter(b=>nrm(b.mapel)===nrm(u.mapel)&&(kc(b.kelas,u.kelas)||kc(u.kelas,b.kelas))).reduce((x,b)=>x+Number(b.n),0);
 function rUjian(){
   const L=[...D.ujian].sort((x,y)=>(ms(y.mulai)||0)-(ms(x.mulai)||0));
   $('ujList').innerHTML=L.length?L.map(u=>{const[t,c]=stU(u),id=esc(u.id);
@@ -374,13 +375,13 @@ function rUjian(){
 let FID=null;
 function formU(id,dup){
   const u=id?D.ujian.find(x=>same(x.id,id)):null,b=u||{};FID=u&&!dup?u.id:null;
-  const kls=[...new Set(D.siswa.map(s=>s.kelas))].sort(),maps=[...new Set((D.bank||[]).map(x=>x.mapel))];
+  const kls=[...new Set(D.siswa.map(s=>s.kelas))].sort(),maps=[...new Set((D.bank||[]).map(x=>x.mapel))],tingkat=[...new Set(kls.map(k=>(String(k).match(/^\d+/)||[''])[0]).filter(Boolean))].sort();
   const ck=(i,v,t)=>`<label style="flex:0 0 auto"><input type="checkbox" id="${i}" ${v?'checked':''} style="width:auto"> ${t}</label>`;
   $('ujForm').hidden=false;
   $('ujForm').innerHTML=`<h3>${FID?'Edit ujian':dup?'Sesi baru (salinan)':'Ujian baru'}</h3>
    <input id="fJudul" placeholder="Judul ujian, misal: PAS Fiqih Kelas 7" value="${esc(dup?(b.judul||'')+' (Sesi baru)':b.judul)}">
    <div class="row"><input id="fMapel" list="dlM" placeholder="Mata pelajaran" value="${esc(b.mapel)}" oninput="infoForm()"><datalist id="dlM">${maps.map(m=>`<option value="${esc(m)}">`).join('')}</datalist>
-   <select id="fKelas" onchange="infoForm()"><option value="semua">Semua kelas</option>${kls.map(k=>`<option ${nrm(b.kelas)===nrm(k)?'selected':''}>${esc(k)}</option>`).join('')}</select>
+   <select id="fKelas" onchange="infoForm()"><option value="semua">Semua kelas</option>${tingkat.map(g=>`<option value="${g}" ${nrm(b.kelas)===g?'selected':''}>Seluruh kelas ${g}</option>`).join('')}${kls.map(k=>`<option ${nrm(b.kelas)===nrm(k)?'selected':''}>${esc(k)}</option>`).join('')}</select>
    <input id="fDurasi" type="number" min="1" placeholder="Durasi (menit)" value="${esc(b.durasi||60)}"></div>
    <div class="row"><label>Boleh mulai dari<input id="fMulai" type="datetime-local" value="${dup?'':toI(b.mulai)}"></label><label>Paling lambat mulai<input id="fSelesai" type="datetime-local" value="${dup?'':toI(b.selesai)}"></label></div>
    <div class="row">${ck('fAktif',u?ya(b.aktif):true,'Aktif')}${ck('fAcak',u?String(b.acak).toLowerCase()!=='tidak':true,'Acak soal')}${ck('fNilai',ya(b.tampilnilai),'Tampilkan nilai')}${ck('fBahas',ya(b.tampilpembahasan),'Tampilkan pembahasan')}
